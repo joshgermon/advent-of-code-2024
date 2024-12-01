@@ -2,75 +2,41 @@ use std::collections::HashMap;
 
 fn main() {
     let input = include_str!("./input.txt");
+    let (location_list_1, location_list_2) = parse_input(input).expect("failed to parse input");
 
-    let result_1 = part_one(input);
+    let result_1 = part_one(&location_list_1, &location_list_2);
     println!("Total difference: {result_1}");
 
-    let result_2 = part_two(input);
+    let result_2 = part_two(&location_list_1, &location_list_2);
     println!("Total similarity score: {result_2}");
 }
 
-fn part_one(input: &str) -> i32 {
-    let mut location_list_1 = Vec::new();
-    let mut location_list_2 = Vec::new();
+fn parse_input(input: &str) -> Result<(Vec<i32>, Vec<i32>), String> {
+    let (mut list_1, mut list_2): (Vec<i32>, Vec<i32>) = input.lines().map(|line| {
+        let nums = line.split_whitespace().into_iter().map(|x| x.parse().unwrap()).collect::<Vec<i32>>();
+        (nums[0], nums[1])
+    }).unzip();
 
-    input.lines().for_each(|x| {
-        let loc_id_entry: Vec<&str> = x.split_whitespace().collect();
-        let [first, second] = [loc_id_entry[0], loc_id_entry[1]];
+    list_1.sort();
+    list_2.sort();
 
-        let first_loc_id: i32 = first.parse().expect("failed to parse");
-        let second_loc_id: i32 = second.parse().expect("failed to parse");
-
-        location_list_1.push(first_loc_id);
-        location_list_2.push(second_loc_id);
-    });
-
-    location_list_1.sort();
-    location_list_2.sort();
-
-    assert!(location_list_1.len() == location_list_2.len());
-
-    let list_len = location_list_1.len();
-
-    let mut total_diff: i32 = 0;
-
-    for i in 0..list_len {
-        let id_difference = location_list_1[i] - location_list_2[i];
-        total_diff += id_difference.abs();
-    }
-
-    return total_diff;
+    return Ok((list_1, list_2));
 }
 
-fn part_two(input: &str) -> i32 {
-    let mut location_list_1 = Vec::new();
 
-    let mut list_2_num_freq = HashMap::<i32, i32>::new();
+fn part_one(list_1: &Vec<i32>, list_2: &Vec<i32>) -> i32 {
+    return list_1.iter().zip(list_2.iter()).fold(0, |acc, (x, y)| { (x - y).abs() + acc });
+}
 
-    input.lines().for_each(|x| {
-        let loc_id_entry: Vec<&str> = x.split_whitespace().collect();
-        let [first, second] = [loc_id_entry[0], loc_id_entry[1]];
+fn part_two(list_1: &Vec<i32>, list_2: &Vec<i32>) -> i32 {
+    let mut freq_map = HashMap::with_capacity(list_1.len());
 
-        let first_loc_id: i32 = first.parse().expect("failed to parse");
-        let second_loc_id: i32 = second.parse().expect("failed to parse");
+    for num in list_2 {
+        let freq = freq_map.entry(num).or_insert(0);
+        *freq += 1;
+    }
 
-        location_list_1.push(first_loc_id);
-
-        if list_2_num_freq.contains_key(&second_loc_id) {
-            list_2_num_freq.entry(second_loc_id).and_modify(|v| *v += 1);
-        } else {
-            list_2_num_freq.insert(second_loc_id, 1);
-        }
-    });
-
-    let mut total_diff = 0;
-    location_list_1.iter().for_each(|x| {
-        if list_2_num_freq.contains_key(x) {
-           total_diff += list_2_num_freq.get(&x).unwrap() * x;
-        }
-    });
-
-    return total_diff;
+    return list_1.iter().map(|x| (x * freq_map.get(&x).unwrap_or(&0))).sum();
 }
 
 #[cfg(test)]
@@ -78,27 +44,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_part_one() {
+    fn test_input_parse() {
         let test_input = "3   4
             4   3
             2   5
             1   3
             3   9
             3   3";
-        let result = part_one(test_input);
+        let result = parse_input(test_input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), (vec![1, 2, 3, 3, 3, 4], vec![3, 3, 3, 4, 5, 9]));
+    }
+
+    #[test]
+    fn test_part_one() {
+        let list_1 = vec![1, 2, 3, 3, 3, 4];
+        let list_2 = vec![3, 3, 3, 4, 5, 9];
+        let result = part_one(&list_1, &list_2);
         assert_eq!(result, 11);
     }
 
     #[test]
     fn test_part_two() {
-        let test_input = "3   4
-            4   3
-            2   5
-            1   3
-            3   9
-            3   3";
+        let list_1 = vec![1, 2, 3, 3, 3, 4];
+        let list_2 = vec![3, 3, 3, 4, 5, 9];
 
-        let result = part_two(test_input);
+        let result = part_two(&list_1, &list_2);
         assert_eq!(result, 31);
     }
 }
+
