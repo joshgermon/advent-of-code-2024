@@ -1,2 +1,2 @@
-/target
-day-1/target
+**/target
+**/*.txt
