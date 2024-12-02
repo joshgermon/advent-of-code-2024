@@ -20,58 +20,7 @@ struct ReadingComparison {
     direction: Ordering,
 }
 
-// fn calculate_safe_reports(reports: &Vec<Vec<i32>>, problem_dampener: bool) -> i32 {
-//     let mut total_safe_reports = 0;
-//
-//     for report in reports {
-//         let mut is_safe = true;
-//         let mut report_direction: Option<Direction> = None;
-//
-//         for (i, r) in report.clone().into_iter().enumerate() {
-//             let mut unsafe_reading = false;
-//
-//             if let Some(next) = report.get(i + 1) {
-//                 let comparison = compare_subsequent_readings(r, *next);
-//                 if let Some(ref direction) = report_direction {
-//                     if *direction != comparison.direction {
-//                         unsafe_reading = true;
-//                     }
-//                 } else {
-//                     report_direction = Some(comparison.direction)
-//                 }
-//
-//                 if !comparison.within_range {
-//                     unsafe_reading = true;
-//                 }
-//
-//                 if unsafe_reading {
-//                     if !problem_dampener || i == 0 {
-//                         is_safe = false;
-//                         break;
-//                     }
-//
-//                     if let Some(prev) = report.get(i - 1) {
-//                         let prev_comparison = compare_subsequent_readings(*prev, *next);
-//                         if !prev_comparison.within_range
-//                             || report_direction.clone().unwrap() != prev_comparison.direction
-//                         {
-//                             is_safe = false;
-//                             break;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//
-//         if is_safe {
-//             total_safe_reports += 1
-//         };
-//     }
-//
-//     return total_safe_reports;
-// }
-
-fn compare_subsequent_readings(x: i32, y: i32) -> ReadingComparison {
+fn cmp_readings(x: i32, y: i32) -> ReadingComparison {
     let abs_diff = (x - y).abs();
     let direction = x.cmp(&y);
 
@@ -81,45 +30,37 @@ fn compare_subsequent_readings(x: i32, y: i32) -> ReadingComparison {
     };
 }
 
-fn calc_reports(reports: &Vec<Vec<i32>>, problem_dampener: bool) -> i32 {
+fn is_unsafe(report: &Vec<i32>) -> bool {
+    assert!(report.len() > 2);
+    let report_direction = report[0].cmp(&report[1]);
+    return report.windows(2).any(|window| {
+        let (prev, curr) = (window[0], window[1]);
+        let comparison = cmp_readings(prev, curr);
+        match report_direction {
+            std::cmp::Ordering::Equal => return true, // This is unsafe reading
+            _ => return report_direction != comparison.direction || !comparison.within_range,
+        }
+    });
+}
+
+fn run_reports(reports: &Vec<Vec<i32>>, problem_dampener_enabled: bool) -> i32 {
     let mut total_safe_reports = 0;
     for report in reports {
-        let report_direction = report[0].cmp(&report[1]);
-        let has_unsafe_reading = report.windows(2).any(|window| {
-            let (prev, curr) = (window[0], window[1]);
-            let comparison = compare_subsequent_readings(prev, curr);
-            match report_direction {
-                std::cmp::Ordering::Equal => return true, // This is unsafe reading
-                _ => return report_direction != comparison.direction || !comparison.within_range,
-            }
-        });
+        let mut report_is_unsafe = is_unsafe(&report);
 
-        if has_unsafe_reading && problem_dampener {
+        if report_is_unsafe && problem_dampener_enabled {
             for i in 0..report.len() {
-                let mut brute_force = report.clone();
-                brute_force.remove(i);
+                let mut report_clone = report.clone();
+                report_clone.remove(i);
 
-                let brute_force_direction = brute_force[0].cmp(&brute_force[1]);
-                let pd_unsafe_reading = brute_force.windows(2).any(|window| {
-                    let (prev, curr) = (window[0], window[1]);
-                    let comparison = compare_subsequent_readings(prev, curr);
-                    match brute_force_direction {
-                        std::cmp::Ordering::Equal => return true, // This is unsafe reading
-                        _ => {
-                            return brute_force_direction != comparison.direction
-                                || !comparison.within_range
-                        }
-                    }
-                });
-
-                if !pd_unsafe_reading {
-                    total_safe_reports += 1;
+                report_is_unsafe = is_unsafe(&report_clone);
+                if !report_is_unsafe {
                     break;
                 }
             }
         }
 
-        if !has_unsafe_reading {
+        if !report_is_unsafe {
             total_safe_reports += 1;
         }
     }
@@ -127,11 +68,11 @@ fn calc_reports(reports: &Vec<Vec<i32>>, problem_dampener: bool) -> i32 {
 }
 
 fn part_1(reports: &Vec<Vec<i32>>) -> i32 {
-    calc_reports(reports, false)
+    run_reports(reports, false)
 }
 
 fn part_2(reports: &Vec<Vec<i32>>) -> i32 {
-    calc_reports(reports, true)
+    run_reports(reports, true)
 }
 
 fn parse_input(input: &str) -> Vec<Vec<i32>> {
