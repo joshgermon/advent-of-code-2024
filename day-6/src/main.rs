@@ -1,13 +1,19 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Instant};
 
 fn main() {
     let input = include_str!("../input.txt");
 
+    let start = Instant::now();
     let result = part_one(input);
+    let duration = start.elapsed();
     println!("Total visited: {}", result);
+    println!("Time taken part one: {:?}", duration);
 
+    let start = Instant::now();
     let result_2 = part_two(input);
+    let duration_2 = start.elapsed();
     println!("Total obstacle options: {}", result_2);
+    println!("Time taken part one: {:?}", duration_2);
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
@@ -16,6 +22,66 @@ enum Direction {
     Right,
     Up,
     Down,
+}
+
+struct Grid<T> {
+    data: Vec<Vec<T>>,
+    width: usize,
+    height: usize,
+}
+
+impl<T> Grid<T> {
+    fn new(data: Vec<Vec<T>>) -> Self {
+        let width = data.len();
+        let height = data.get(0).unwrap().len();
+        Self {
+            data,
+            width,
+            height,
+        }
+    }
+
+    fn get(&self, point: &Point) -> Option<T>
+    where
+        T: Clone,
+    {
+        if point.x < 0 || point.y < 0 {
+            return None;
+        }
+
+        self.data
+            .get(point.y as usize)?
+            .get(point.x as usize)
+            .cloned()
+    }
+
+    fn set(&mut self, point: &Point, val: T) -> Result<(), String> {
+        if point.x < 0 || point.y < 0 {
+            return Err(String::from("Point is out of bounds"));
+        }
+        let row = self.data.get_mut(point.y as usize).ok_or("No valid row");
+        let col_val = row?.get_mut(point.x as usize).ok_or("No valid column")?;
+
+        *col_val = val;
+        Ok(())
+    }
+
+    fn find_first(&self, val: T) -> Option<Point>
+    where
+        T: PartialEq,
+    {
+        for i in 0..self.data.len() {
+            for j in 0..self.data[i].len() {
+                if self.data[i][j] == val {
+                    return Some(Point {
+                        x: j as i32,
+                        y: i as i32,
+                    });
+                }
+            }
+        }
+        None
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
@@ -35,57 +101,53 @@ impl Point {
     }
 }
 
-fn parse_input(input: &str) -> (Point, Vec<Vec<char>>) {
-    let grid = input
+fn parse_input(input: &str) -> (Grid<char>, Point) {
+    let grid_data = input
         .lines()
         .map(|l| l.chars().collect())
         .collect::<Vec<Vec<char>>>();
 
-    let mut starting_pos: Option<Point> = None;
+    let grid = Grid::new(grid_data);
+    let starting_pos: Point = grid
+        .find_first('^')
+        .expect("No starting position found in input");
 
-    // Look, i know.. but im tired and been doing too many puzzles to have a brain left for this
-    for i in 0..grid.len() {
-        for j in 0..grid[i].len() {
-            if grid[i][j] == '^' {
-                starting_pos = Some(Point { x: j as i32, y: i as i32 });
-            }
-        }
-    }
-
-    (starting_pos.unwrap(), grid)
+    (grid, starting_pos)
 }
 
 fn part_one(input: &str) -> i32 {
-    let (starting_pos, grid) = parse_input(input);
-    simulate_guard_path(starting_pos, &grid).unwrap().len() as i32
+    let (grid, starting_pos) = parse_input(input);
+    simulate_guard_path(&grid, &starting_pos).unwrap().len() as i32
 }
 
 fn part_two(input: &str) -> i32 {
-    let (starting_pos, mut grid) = parse_input(input);
+    let (mut grid, starting_pos) = parse_input(input);
     // Do first iteration to get visted points
-    let visited = simulate_guard_path(starting_pos.clone(), &grid).unwrap();
+    let visited = simulate_guard_path(&grid, &starting_pos).unwrap();
     let mut obstacle_points = HashSet::new();
 
     for point in visited {
         // Add obstacle to grid at point
-        let prev_val = grid[point.y as usize][point.x as usize];
-        grid[point.y as usize][point.x as usize] = '#';
-        let visited = simulate_guard_path(starting_pos.clone(), &grid);
+        let prev_val = grid.get(&point).expect("Previous value did not exist");
+        let _ = grid.set(&point, '#');
+
+        let visited = simulate_guard_path(&grid, &starting_pos);
 
         // Change back
-        grid[point.y as usize][point.x as usize] = prev_val;
+        let _ = grid.set(&point, prev_val);
 
         match visited {
             Ok(_) => continue,
-            Err(_) => { obstacle_points.insert(point.clone()); },
+            Err(_) => {
+                obstacle_points.insert(point.clone());
+            }
         };
-
     }
 
     obstacle_points.len() as i32
 }
 
-fn simulate_guard_path(starting_pos: Point, grid: &Vec<Vec<char>>) -> Result<HashSet<Point>, String>  {
+fn simulate_guard_path(grid: &Grid<char>, starting_pos: &Point) -> Result<HashSet<Point>, String> {
     let mut visited = HashSet::new();
     let mut visited_with_directions = HashSet::new();
 
@@ -96,11 +158,11 @@ fn simulate_guard_path(starting_pos: Point, grid: &Vec<Vec<char>>) -> Result<Has
 
     point.move_in_direction(&direction);
 
-    let mut current_char = get_grid_value(&grid, &point);
+    let mut current_char = grid.get(&point);
 
     while current_char.is_some() {
         if visited_with_directions.contains(&(point.clone(), direction.clone())) {
-            return Err(String::from("LOOP"));
+            return Err(String::from("Found a loop"));
         }
 
         visited_with_directions.insert((point.clone(), direction.clone()));
@@ -108,39 +170,22 @@ fn simulate_guard_path(starting_pos: Point, grid: &Vec<Vec<char>>) -> Result<Has
 
         let mut next_point = point.clone();
         next_point.move_in_direction(&direction);
-        let next_char = get_grid_value(&grid, &next_point);
+        let next_char = grid.get(&next_point);
 
         match next_char {
             Some(ch) => {
                 if ch == '#' {
-                    // Rotate direction right & move in that direction
                     direction = rotate_direction_right(&direction);
-
-                    // This was a problem! Don't turn and move, turn OR move to let the loop
-                    // check if the turn gets stuck too
-                    //
-                    // point.move_in_direction(&direction);
-                    // current_char = get_grid_value(&grid, &point);
                     continue;
                 }
-                // Continue in current direction
                 point.move_in_direction(&direction);
                 current_char = next_char;
-            },
-            None => break
+            }
+            None => break,
         }
-
     }
 
     Ok(visited)
-}
-
-fn get_grid_value(grid: &Vec<Vec<char>>, point: &Point) -> Option<char> {
-    if point.x < 0 || point.y < 0 {
-        return None;
-    }
-
-    grid.get(point.y as usize)?.get(point.x as usize).copied()
 }
 
 fn rotate_direction_right(d: &Direction) -> Direction {
@@ -167,7 +212,7 @@ mod tests {
 #.........
 ......#...";
 
-    const TEST_INPUT_2: &str =".#..
+    const TEST_INPUT_2: &str = ".#..
 #..#
 ....
 ^...
