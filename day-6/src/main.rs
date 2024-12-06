@@ -70,8 +70,8 @@ impl<T> Grid<T> {
     where
         T: PartialEq,
     {
-        for i in 0..self.data.len() {
-            for j in 0..self.data[i].len() {
+        for i in 0..self.height {
+            for j in 0..self.width {
                 if self.data[i][j] == val {
                     return Some(Point {
                         x: j as i32,
